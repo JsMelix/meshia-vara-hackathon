@@ -1,133 +1,265 @@
-# TODO #1: Import necessary libraries
-
+import streamlit as st
+from langchain.prompts import PromptTemplate
+from langchain_google_genai import ChatGoogleGenerativeAI
 import os
-import pandas as pd
-import taipy.gui.builder as tgb
 from dotenv import load_dotenv
-from web3 import Web3
-from taipy.gui import Gui, notify
-
-# TODO #2: Load environment variables
+import random
+from datetime import date
 
 load_dotenv()
 
-# TODO #3: Define questions for the quiz
+# --- Configuración de Gemini ---
+gemini_api_key = os.getenv("GOOGLE_API_KEY")
+if not gemini_api_key:
+    st.error("La clave de API de Gemini no se encontró. Asegúrate de haberla configurado en el archivo .env.")
+    st.stop()
 
-questions = [
-    {"question": "What is AI?", "answer": "Artificial Intelligence"},
-    {"question": "What is Blockchain?", "answer": "A decentralized ledger"},
-    {"question": "What does NFT stand for?", "answer": "Non-Fungible Token"},
-    # Add more questions as needed
-]
+llm = ChatGoogleGenerativeAI(model="gemini-pro", google_api_key=gemini_api_key)
 
-# Initialize quiz state variables
-current_question_index = 0
-user_wallet = None
-user_tokens = 0
+# --- Configuración de Langchain PromptTemplate ---
+prompt_template = PromptTemplate(
+    input_variables=["topic"],
+    template="""Crea una pregunta concisa y desafiante sobre el tema de {topic} para un mini-juego vocacional de IA. """,
+)
 
+python_duolingo_exercise_prompt = PromptTemplate(
+    input_variables=["python_concept"],
+    template="""Crea un ejercicio de programación en Python estilo Duolingo sobre el concepto de {python_concept}. El ejercicio debe ser un pequeño fragmento de código para completar o corregir. Proporciona el código con espacios en blanco o errores y pide al usuario que lo complete o corrija para que funcione correctamente. Incluye la solución correcta y una breve explicación de la solución y el concepto involucrado. Separa la solución correcta y la explicación con '#### Explicación:'. """,
+)
 
-# TODO #4: Define functions for wallet connection and gameplay logic
+rust_duolingo_exercise_prompt = PromptTemplate(
+    input_variables=["rust_concept"],
+    template="""Crea un ejercicio de programación en Rust estilo Duolingo sobre el concepto de {rust_concept}. El ejercicio debe ser un pequeño fragmento de código para completar o corregir. Proporciona el código con espacios en blanco o errores y pide al usuario que lo complete o corrija para que funcione correctamente. Incluye la solución correcta y una breve explicación de la solución y el concepto involucrado. Separa la solución correcta y la explicación con '#### Explicación:'. """,
+)
 
-def connect_wallet(state):
-    global user_wallet
-    infura_url = os.getenv("INFURA_URL", "https://mainnet.infura.io/v3/YOUR_INFURA_PROJECT_ID")
-    web3 = Web3(Web3.HTTPProvider(infura_url))
-    if web3.isConnected():
-        user_wallet = web3.eth.account.create()
-        state.wallet_address = user_wallet.address
-        notify(state, "success", f"Wallet connected: {user_wallet.address}")
-    else:
-        notify(state, "error", "Failed to connect to wallet.")
+# --- Variables de estado de la sesión ---
+if 'wallet_address' not in st.session_state:
+    st.session_state['wallet_address'] = None
+if 'token_balance' not in st.session_state:
+    st.session_state['token_balance'] = 0
+if 'current_prompt' not in st.session_state:
+    st.session_state['current_prompt'] = None
+if 'challenge_submitted' not in st.session_state:
+    st.session_state['challenge_submitted'] = False
+if 'feedback' not in st.session_state:
+    st.session_state['feedback'] = None
+if 'python_duo_exercise_content' not in st.session_state:
+    st.session_state['python_duo_exercise_content'] = None
+if 'rust_duo_exercise_content' not in st.session_state:
+    st.session_state['rust_duo_exercise_content'] = None
+if 'python_duo_solution' not in st.session_state:
+    st.session_state['python_duo_solution'] = None
+if 'python_duo_explanation' not in st.session_state:
+    st.session_state['python_duo_explanation'] = None
+if 'rust_duo_solution' not in st.session_state:
+    st.session_state['rust_duo_solution'] = None
+if 'rust_duo_explanation' not in st.session_state:
+    st.session_state['rust_duo_explanation'] = None
+if 'knowledge_challenge_completed' not in st.session_state:
+    st.session_state['knowledge_challenge_completed'] = False
+if 'python_exercise_completed_today' not in st.session_state:
+    st.session_state['python_exercise_completed_today'] = False
+if 'rust_exercise_completed_today' not in st.session_state:
+    st.session_state['rust_exercise_completed_today'] = False
 
+# --- Funciones del Agente de IA ---
+def generate_prompt(topic):
+    prompt = prompt_template.format(topic=topic)
+    response = llm.invoke(prompt)
+    return response.content
 
-def check_answer(state):
-    global current_question_index, user_tokens
-    correct_answer = questions[current_question_index]["answer"].lower()
-    if state.query_message.strip().lower() == correct_answer:
-        state.messages.append(
-            {"style": "assistant_message", "content": "Correct! You earned 10 tokens!"}
-        )
-        user_tokens += 10
-    else:
-        state.messages.append(
-            {"style": "assistant_message", "content": "Incorrect. Try again!"}
-        )
-    
-    current_question_index = (current_question_index + 1) % len(questions)
-    next_question = questions[current_question_index]["question"]
-    state.messages.append(
-        {"style": "assistant_message", "content": f"Next question: {next_question}"}
+def verify_answer(prompt, user_answer):
+    verification_prompt_template = PromptTemplate(
+        input_variables=["prompt", "user_answer"],
+        template="""Evalúa la siguiente respuesta a la pregunta dada.
+        Pregunta: {prompt}
+        Respuesta del usuario: {user_answer}
+        Indica si la respuesta del usuario es correcta y relevante a la pregunta.
+        Responde con 'Sí' o 'No'.
+        """,
     )
-    state.query_message = ""
-    state.conv.update_content(state, create_conv(state))
+    verification_prompt = verification_prompt_template.format(prompt=prompt, user_answer=user_answer)
+    response = llm.invoke(verification_prompt)
+    return "sí" in response.content.lower()
 
+def generate_hackathon_idea():
+    prompt_idea = "Genera una idea innovadora para un proyecto de hackathon que utilice inteligencia artificial y blockchain."
+    response = llm.invoke(prompt_idea)
+    return response.content
 
-def create_conv(state):
-    messages_dict = {}
-    with tgb.Page() as conversation:
-        for i, message in enumerate(state.messages):
-            text = message["content"].replace("<br>", "\n").replace('"', "'")
-            messages_dict[f"message_{i}"] = text
-            tgb.text(
-                f"{{messages_dict.get('message_{i}') or ''}}",
-                class_name=f"message_base {message['style']}",
-                mode="md",
-            )
-    state.messages_dict = messages_dict
-    return conversation
+def chatbot_response(query):
+    response = llm.invoke(query)
+    return response.content
 
+def generate_duolingo_exercise(concept, is_rust=False):
+    if is_rust:
+        prompt = rust_duolingo_exercise_prompt.format(rust_concept=concept)
+    else:
+        prompt = python_duolingo_exercise_prompt.format(python_concept=concept)
+    response = llm.invoke(prompt)
+    parts = response.content.split("#### Explicación:")
+    exercise = parts[0].strip()
+    solution_explanation_part = parts[1].split("\n") if len(parts) > 1 else [""]
+    solution = solution_explanation_part[0].strip()
+    explanation = "\n".join(solution_explanation_part[1:]).strip() if len(solution_explanation_part) > 1 else None
+    return exercise, solution, explanation
 
-def reset_game(state):
-    global current_question_index, user_tokens
-    current_question_index = 0
-    user_tokens = 0
-    state.messages = [
-        {"style": "assistant_message", "content": "Welcome to the Quiz Game!"},
-        {"style": "assistant_message", "content": questions[current_question_index]["question"]},
-    ]
-    state.query_message = ""
-    state.conv.update_content(state, create_conv(state))
+# --- Funciones de Blockchain (Simuladas por ahora) ---
+def connect_wallet():
+    st.session_state['wallet_address'] = "0x" + os.urandom(20).hex()
+    st.session_state['token_balance'] = 10
+    st.success(f"Wallet conectada: {st.session_state['wallet_address']}")
 
+def award_tokens(amount=1):
+    if st.session_state['wallet_address']:
+        st.session_state['token_balance'] += amount
+        st.success(f"¡Ejercicio completado correctamente! +{amount} tokens. Saldo actual: {st.session_state['token_balance']}")
+    else:
+        st.warning("Conecta tu wallet para recibir tokens.")
 
-# TODO #5: Design the GUI layout
+# --- Interfaz de Streamlit ---
+st.title("Vocational AI Mini-Game")
+st.write("¡Aprende sobre nuevas tecnologías y gana tokens!")
 
-with tgb.Page() as page:
-    with tgb.layout(columns="350px 1"):
-        with tgb.part(class_name="sidebar"):
-            tgb.text("## Quiz Game: AI & Blockchain", mode="md")
-            tgb.button(
-                "New Game",
-                class_name="fullwidth plain",
-                on_action=reset_game,
-            )
-            tgb.button(
-                "Connect Wallet",
-                class_name="fullwidth plain",
-                on_action=connect_wallet,
-            )
-            tgb.text("## Wallet Address: <|wallet_address|>", mode="md")
-            tgb.text("## Tokens Earned: <|user_tokens|>", mode="md")
+# --- Barra lateral para documentación y chatbot ---
+with st.sidebar:
+    st.header("Vara Network Documentation")
+    st.markdown("[Enlace a la documentación de Vara Network](https://vara.network/)")
 
-        with tgb.part(class_name="p1"):
-            tgb.part(partial="{conv}", height="600px", class_name="card card_chat")
-            with tgb.part("card mt1"):
-                tgb.input(
-                    "{query_message}",
-                    on_action=check_answer,
-                    change_delay=-1,
-                    label="Write your answer:",
-                    class_name="fullwidth",
-                )
+    st.header("Chat con la IA")
+    chatbot_query = st.text_input("Escribe tu pregunta:", key="chatbot_input")
+    if chatbot_query:
+        with st.spinner("Pensando..."):
+            chatbot_answer = chatbot_response(chatbot_query)
+            st.write(chatbot_answer)
 
+    st.header("Progreso")
+    today = date.today()
+    st.write(f"**Hoy:** {today.strftime('%Y-%m-%d')}")
+    st.write("**Retos Completados:**")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Conocimiento", "✅" if st.session_state['knowledge_challenge_completed'] else "❌")
+    with col2:
+        st.metric("Python", "✅" if st.session_state['python_exercise_completed_today'] else "❌")
+    with col3:
+        st.metric("Rust", "✅" if st.session_state['rust_exercise_completed_today'] else "❌")
 
-# TODO #6: Add the application run logic
+# --- Botón para conectar la wallet ---
+if st.button("Conectar Wallet"):
+    connect_wallet()
 
-if __name__ == "__main__":
-    gui = Gui(page)
-    conv = gui.add_partial("")
-    gui.run(
-        title="Quiz Game: AI & Blockchain",
-        dark_mode=False,
-        margin="0px",
-        debug=True,
-    )
+# --- Mostrar la dirección de la wallet y el saldo de tokens ---
+if st.session_state['wallet_address']:
+    st.write(f"**Wallet:** {st.session_state['wallet_address']}")
+    st.write(f"**Tokens:** {st.session_state['token_balance']}")
+
+# --- Desafío de Conocimiento ---
+st.header("Desafío de Conocimiento")
+if st.button("Obtener Pregunta", disabled=st.session_state['knowledge_challenge_completed']):
+    with st.spinner('Generando pregunta...'):
+        st.session_state['current_prompt'] = generate_prompt(topic="Inteligencia Artificial")
+        st.session_state['challenge_submitted'] = False
+        st.session_state['feedback'] = None
+
+if st.session_state['current_prompt']:
+    st.info(st.session_state['current_prompt'])
+
+    user_answer = st.text_area("Tu respuesta:", key="answer_input")
+
+    if st.button("Enviar Respuesta", disabled=st.session_state['challenge_submitted']):
+        if user_answer:
+            with st.spinner('Verificando respuesta...'):
+                is_correct = verify_answer(st.session_state['current_prompt'], user_answer)
+                if is_correct:
+                    st.session_state['feedback'] = "¡Correcto!"
+                    award_tokens()
+                    st.session_state['challenge_submitted'] = True
+                    st.session_state['knowledge_challenge_completed'] = True
+                else:
+                    st.session_state['feedback'] = "Incorrecto. Inténtalo de nuevo."
+        else:
+            st.warning("Por favor, ingresa tu respuesta.")
+
+    if st.session_state['feedback']:
+        st.write(f"**Retroalimentación:** {st.session_state['feedback']}")
+
+# --- Ejercicios de Programación Estilo Duolingo ---
+st.header("Ejercicios de Programación Estilo Duolingo")
+
+# --- Python Exercise ---
+st.subheader("Python")
+if st.button("Generar Ejercicio de Python", key="python_duo_button", disabled=st.session_state['python_exercise_completed_today']):
+    with st.spinner("Generando ejercicio de Python..."):
+        python_concepts = ["Listas", "Funciones", "Clases", "Bucles", "Condicionales"]
+        chosen_concept = random.choice(python_concepts)
+        exercise, solution, explanation = generate_duolingo_exercise(chosen_concept)
+        st.session_state['python_duo_exercise_content'] = exercise
+        st.session_state['python_duo_solution'] = solution
+        st.session_state['python_duo_explanation'] = explanation
+        st.session_state['python_duo_submitted'] = False
+
+if st.session_state.get('python_duo_exercise_content'):
+    st.write(st.session_state['python_duo_exercise_content'])
+    python_duo_answer = st.text_area("Completa o corrige el código:", key="python_duo_input")
+    check_python_disabled = st.session_state.get('python_duo_submitted', False)
+    if st.button("Comprobar Python", key="check_python_duo", disabled=check_python_disabled):
+        if python_duo_answer:
+            if python_duo_answer.strip() == st.session_state['python_duo_solution'].strip():
+                st.success("¡Correcto!")
+                award_tokens()
+                if st.session_state['python_duo_explanation']:
+                    st.info(f"Explicación: {st.session_state['python_duo_explanation']}")
+                st.session_state['python_exercise_completed_today'] = True
+                st.session_state['python_duo_exercise_content'] = None
+                st.session_state['python_duo_submitted'] = True
+            else:
+                st.error("Incorrecto. Inténtalo de nuevo.")
+                with st.expander("Mostrar solución"):
+                    st.info(f"Solución correcta: \n```python\n{st.session_state['python_duo_solution']}\n```\n")
+                    if st.session_state['python_duo_explanation']:
+                        st.info(f"Explicación: {st.session_state['python_duo_explanation']}")
+        else:
+            st.warning("Por favor, ingresa tu respuesta.")
+
+# --- Rust Exercise ---
+st.subheader("Rust")
+if st.button("Generar Ejercicio de Rust", key="rust_duo_button", disabled=st.session_state['rust_exercise_completed_today']):
+    with st.spinner("Generando ejercicio de Rust..."):
+        rust_concepts = ["Ownership", "Borrowing", "Structs", "Enums", "Traits"]
+        chosen_concept = random.choice(rust_concepts)
+        exercise, solution, explanation = generate_duolingo_exercise(chosen_concept, is_rust=True)
+        st.session_state['rust_duo_exercise_content'] = exercise
+        st.session_state['rust_duo_solution'] = solution
+        st.session_state['rust_duo_explanation'] = explanation
+        st.session_state['rust_duo_submitted'] = False
+
+if st.session_state.get('rust_duo_exercise_content'):
+    st.write(st.session_state['rust_duo_exercise_content'])
+    rust_duo_answer = st.text_area("Completa o corrige el código:", key="rust_duo_input")
+    check_rust_disabled = st.session_state.get('rust_duo_submitted', False)
+    if st.button("Comprobar Rust", key="check_rust_duo", disabled=check_rust_disabled):
+        if rust_duo_answer:
+            if rust_duo_answer.strip() == st.session_state['rust_duo_solution'].strip():
+                st.success("¡Correcto!")
+                award_tokens()
+                if st.session_state['rust_duo_explanation']:
+                    st.info(f"Explicación: {st.session_state['rust_duo_explanation']}")
+                st.session_state['rust_exercise_completed_today'] = True
+                st.session_state['rust_duo_exercise_content'] = None
+                st.session_state['rust_duo_submitted'] = True
+            else:
+                st.error("Incorrecto. Inténtalo de nuevo.")
+                with st.expander("Mostrar solución"):
+                    st.info(f"Solución correcta: \n```rust\n{st.session_state['rust_duo_solution']}\n```\n")
+                    if st.session_state['rust_duo_explanation']:
+                        st.info(f"Explicación: {st.session_state['rust_duo_explanation']}")
+        else:
+            st.warning("Por favor, ingresa tu respuesta.")
+
+# --- Generar ideas para hackathon ---
+st.header("Inspiración para Hackathon")
+if st.button("Obtener Idea para Hackathon"):
+    with st.spinner('Generando ideas...'):
+        hackathon_idea = generate_hackathon_idea()
+        st.success(hackathon_idea)
