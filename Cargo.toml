@@ -1,0 +1,16 @@
+[package]
+name = "vara_quiz_contract"
+version = "0.1.0"
+edition = "2018"
+
+[dependencies]
+ink_lang = { version = "3.0.0", default-features = false }
+ink_storage = { version = "3.0.0", default-features = false }
+scale = { version = "0.1.0", default-features = false }
+scale-info = { version = "1.0.0", default-features = false }
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"

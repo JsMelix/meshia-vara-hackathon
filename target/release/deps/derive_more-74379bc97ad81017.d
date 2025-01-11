@@ -1,0 +1,10 @@
+/workspaces/meshia-vara-hackathon/target/release/deps/libderive_more-74379bc97ad81017.so: /home/codespace/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/derive_more-0.99.18/src/lib.rs /home/codespace/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/derive_more-0.99.18/src/syn_compat.rs /home/codespace/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/derive_more-0.99.18/src/utils.rs /home/codespace/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/derive_more-0.99.18/src/display.rs /home/codespace/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/derive_more-0.99.18/src/from.rs /home/codespace/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/derive_more-0.99.18/src/parsing.rs
+
+/workspaces/meshia-vara-hackathon/target/release/deps/derive_more-74379bc97ad81017.d: /home/codespace/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/derive_more-0.99.18/src/lib.rs /home/codespace/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/derive_more-0.99.18/src/syn_compat.rs /home/codespace/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/derive_more-0.99.18/src/utils.rs /home/codespace/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/derive_more-0.99.18/src/display.rs /home/codespace/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/derive_more-0.99.18/src/from.rs /home/codespace/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/derive_more-0.99.18/src/parsing.rs
+
+/home/codespace/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/derive_more-0.99.18/src/lib.rs:
+/home/codespace/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/derive_more-0.99.18/src/syn_compat.rs:
+/home/codespace/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/derive_more-0.99.18/src/utils.rs:
+/home/codespace/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/derive_more-0.99.18/src/display.rs:
+/home/codespace/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/derive_more-0.99.18/src/from.rs:
+/home/codespace/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/derive_more-0.99.18/src/parsing.rs:
